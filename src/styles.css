@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@source "../src";
+
+@custom-variant dark (&:is(.dark *));
+
+/* TalentFlow — Enterprise Tech Portal Design System.
+   Sleek dark-first aesthetics inspired by Stripe/Linear. */
+
+@theme inline {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  /* SLA semantic tokens */
+  --color-sla-ok: var(--sla-ok);
+  --color-sla-ok-foreground: var(--sla-ok-foreground);
+  --color-sla-warn: var(--sla-warn);
+  --color-sla-warn-foreground: var(--sla-warn-foreground);
+  --color-sla-risk: var(--sla-risk);
+  --color-sla-risk-foreground: var(--sla-risk-foreground);
+  --color-sla-critical: var(--color-destructive);
+  --color-sla-critical-foreground: var(--color-destructive-foreground);
+}
+
+:root {
+  --radius: 12px;
+
+  /* TVSE Premium Light Theme Palette */
+  --background: oklch(0.98 0.005 220);
+  --foreground: oklch(0.2 0.015 220);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.015 220);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.015 220);
+
+  /* TVSE Corporate Cyan Blue brand color */
+  --primary: oklch(0.67 0.17 220);
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.95 0.01 220);
+  --secondary-foreground: oklch(0.2 0.015 220);
+
+  --muted: oklch(0.95 0.01 220);
+  --muted-foreground: oklch(0.45 0.015 220);
+
+  /* Cyan soft accent */
+  --accent: oklch(0.93 0.03 220);
+  --accent-foreground: oklch(0.3 0.1 220);
+
+  --destructive: oklch(0.6 0.18 29);
+  --destructive-foreground: oklch(0.99 0.005 220);
+
+  --border: oklch(0.9 0.01 220);
+  --input: oklch(0.95 0.01 220);
+  --ring: oklch(0.67 0.17 220 / 40%);
+
+  /* Cool Gray/Blue sidebar layout */
+  --sidebar: oklch(0.965 0.008 220);
+  --sidebar-foreground: oklch(0.25 0.015 220);
+  --sidebar-accent: oklch(0.91 0.015 220);
+  --sidebar-accent-foreground: oklch(0.1 0.1 220);
+  --sidebar-border: oklch(0.9 0.01 220);
+
+  /* SLA traffic-light tokens (light backgrounds) */
+  --sla-ok: oklch(0.9 0.08 140);
+  --sla-ok-foreground: oklch(0.2 0.06 140);
+  --sla-warn: oklch(0.95 0.08 85);
+  --sla-warn-foreground: oklch(0.3 0.06 85);
+  --sla-risk: oklch(0.93 0.1 50);
+  --sla-risk-foreground: oklch(0.35 0.06 50);
+}
+
+.dark {
+  /* Keep standard dark aesthetics for video meeting rooms */
+  --background: oklch(0.08 0.01 250);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.12 0.015 250);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.12 0.015 250);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.67 0.17 220);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.16 0.02 250);
+  --secondary-foreground: oklch(0.85 0.01 250);
+  --muted: oklch(0.16 0.02 250);
+  --muted-foreground: oklch(0.65 0.01 250);
+  --accent: oklch(0.7 0.18 300);
+  --accent-foreground: oklch(0.98 0.01 250);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0.01 250);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 6%);
+  --ring: oklch(0.67 0.17 220 / 50%);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "cv11", "ss01", "ss02";
+    -webkit-font-smoothing: antialiased;
+    background-image: 
+      radial-gradient(at 0% 0%, oklch(0.67 0.17 220 / 3%) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, oklch(0.67 0.17 220 / 2%) 0px, transparent 50%);
+    background-attachment: fixed;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Glassmorphism card highlight */
+.card-glass {
+  background: linear-gradient(135deg, oklch(1 0 0 / 40%) 0%, oklch(1 0 0 / 10%) 100%);
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-glass:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  box-shadow: 0 10px 25px -5px oklch(0.67 0.17 220 / 8%), 0 8px 10px -6px oklch(0.67 0.17 220 / 8%);
+}
+
+/* Page & Component Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.99); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Micro-transitions on interactive components for fast responsiveness */
+a, button, [role="button"], input, select, textarea, .card {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:hover:not([disabled]), a:hover:not([disabled]) {
+  transform: translateY(-1px);
+}
+
+button:active:not([disabled]), a:active:not([disabled]) {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Performance optimizations: will-change hints for smooth scrolling & transforms */
+.will-animate {
+  will-change: transform, opacity;
+}

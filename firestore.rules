@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myRoles() {
+      return signedIn() && exists(/databases/$(database)/documents/user_roles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.roles
+        : [];
+    }
+
+    function isAdmin() {
+      return 'hr_admin' in myRoles();
+    }
+
+    function isSuperAdmin() {
+      return 'super_admin' in myRoles();
+    }
+
+    function isStaff() {
+      return isAdmin()
+        || isSuperAdmin()
+        || 'recruitment_manager' in myRoles()
+        || 'recruiter' in myRoles()
+        || 'hiring_manager' in myRoles()
+        || 'sourcer' in myRoles();
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    // Marks whether the first (bootstrap) admin has been claimed.
+    match /app_meta/bootstrap {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.claimed_by == uid();
+      allow update, delete: if false;
+    }
+
+    match /profiles/{profileId} {
+      allow read: if signedIn() && (uid() == profileId || isStaff() || isSuperAdmin());
+      allow create, update: if signedIn() && (uid() == profileId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /user_roles/{userId} {
+      allow read: if signedIn() && (uid() == userId || isStaff() || isSuperAdmin());
+      // Self-provisioning on first sign-in: a user may create their own role doc,
+      // but may never grant themselves staff roles unless they are the bootstrap admin.
+      allow create: if signedIn() && uid() == userId && (
+        request.resource.data.roles.hasOnly(['candidate']) ||
+        !exists(/databases/$(database)/documents/app_meta/bootstrap)
+      );
+      allow update, delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // ---- Staff-only operational data -------------------------------------
+
+    match /clients/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Vacancies: staff see everything; anyone (incl. anonymous job seekers)
+    // may read published & open vacancies for the public /jobs pages.
+    match /vacancies/{docId} {
+      allow read: if isStaff()
+        || (resource.data.published == true && resource.data.status in ['open', 'in_progress']);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Replacement details are internal — candidates must never see them.
+    match /replacement_employees/{docId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /extensions/{docId} {
+      allow read, create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    match /comments/{docId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.author_id == uid();
+      allow update, delete: if isStaff() && resource.data.author_id == uid();
+    }
+
+    match /stage_history/{docId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.changed_by == uid();
+      allow update, delete: if false;
+    }
+
+    // ---- Candidate-owned data --------------------------------------------
+
+    match /candidates/{docId} {
+      allow read: if isStaff() || (signedIn() && (docId == uid() || resource == null || resource.data.user_id == uid()));
+      allow create: if isStaff()
+        || (signedIn() && request.resource.data.user_id == uid());
+      allow update: if isStaff()
+        || (signedIn() && resource.data.user_id == uid()
+            && request.resource.data.user_id == resource.data.user_id);
+      allow delete: if isAdmin();
+    }
+
+    match /candidate_applications/{docId} {
+      allow read: if isStaff() || (signedIn() && resource.data.candidate_user_id == uid());
+      // Candidates may apply for themselves; staff may shortlist anyone.
+      allow create: if isStaff()
+        || (signedIn() && request.resource.data.candidate_user_id == uid()
+            && request.resource.data.stage == 'sourcing');
+      // Only staff move applications through the pipeline.
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /interviews/{docId} {
+      allow read: if isStaff() || (signedIn() && resource.data.candidate_user_id == uid());
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ---- Queues and logs: server-side only ------------------------------
+    // Written by server functions with the admin/REST path; clients may only
+    // read their own notifications.
+
+    match /notifications/{docId} {
+      allow read: if isStaff() || (signedIn() && resource.data.recipient_user_id == uid());
+      allow write: if false;
+    }
+
+    match /email_send_log/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /audit_logs/{docId} {
+      allow read: if isAdmin();
+      allow create: if isStaff() && request.resource.data.actor_id == uid();
+      allow update, delete: if false;
+    }
+    match /meetings/{meetingId} {
+      allow read, write: if signedIn();
+      match /signals/{signalId} {
+        allow read, write: if signedIn();
+      }
+    }
+  }
+}
