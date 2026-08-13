@@ -19,15 +19,6 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const [logoClicks, setLogoClicks] = useState(0);
   const navigate = useNavigate();
-  const [scrollY, setScrollY] = useState(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const handleLogoClick = () => {
     const next = logoClicks + 1;
@@ -41,19 +32,10 @@ function Landing() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden flex flex-col">
-      {/* Decorative Parallax Background Blobs */}
-      <div 
-        className="absolute top-[-5%] left-[-10%] w-[500px] h-[500px] rounded-full bg-primary/10 blur-[130px] pointer-events-none transition-transform duration-100 ease-out z-0"
-        style={{ transform: `translate3d(0, ${scrollY * 0.25}px, 0)` }}
-      />
-      <div 
-        className="absolute top-[25%] right-[-15%] w-[600px] h-[600px] rounded-full bg-primary/5 blur-[150px] pointer-events-none transition-transform duration-100 ease-out z-0"
-        style={{ transform: `translate3d(0, ${scrollY * -0.15}px, 0)` }}
-      />
-      <div 
-        className="absolute top-[65%] left-[5%] w-[450px] h-[450px] rounded-full bg-primary/5 blur-[120px] pointer-events-none transition-transform duration-100 ease-out z-0"
-        style={{ transform: `translate3d(0, ${scrollY * 0.1}px, 0)` }}
-      />
+      {/* Decorative Blur Background Blobs (Static for GPU efficiency) */}
+      <div className="absolute top-[-5%] left-[-10%] w-[500px] h-[500px] rounded-full bg-primary/10 blur-[130px] pointer-events-none z-0" />
+      <div className="absolute top-[25%] right-[-15%] w-[600px] h-[600px] rounded-full bg-primary/5 blur-[150px] pointer-events-none z-0" />
+      <div className="absolute top-[65%] left-[5%] w-[450px] h-[450px] rounded-full bg-primary/5 blur-[120px] pointer-events-none z-0" />
 
       <header className="border-b relative z-10 bg-background/80 backdrop-blur-sm sticky top-0">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -131,40 +113,9 @@ function PortalCard({
   primary: { to: string; label: string; search?: Record<string, string> };
   secondary?: { to: string; label: string; search?: Record<string, string> };
 }) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [rotate, setRotate] = useState({ x: 0, y: 0 });
-  const [isHovered, setIsHovered] = useState(false);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const card = cardRef.current;
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
-    const mouseX = e.clientX - rect.left - width / 2;
-    const mouseY = e.clientY - rect.top - height / 2;
-    // Rotation values (max 8 degrees)
-    const rX = -(mouseY / height) * 8;
-    const rY = (mouseX / width) * 8;
-    setRotate({ x: rX, y: rY });
-  };
-
-  const handleMouseLeave = () => {
-    setRotate({ x: 0, y: 0 });
-    setIsHovered(false);
-  };
-
   return (
     <div 
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={handleMouseLeave}
-      style={{
-        transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(${isHovered ? 1.02 : 1}, ${isHovered ? 1.02 : 1}, 1)`,
-        transition: rotate.x === 0 ? "transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)" : "transform 0.05s ease-out",
-      }}
-      className="rounded-2xl border bg-card/85 backdrop-blur-sm p-8 hover:border-primary/45 hover:shadow-2xl transition-all duration-300 group relative overflow-hidden"
+      className="rounded-2xl border bg-card/85 backdrop-blur-sm p-8 hover:border-primary/45 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cubic-bezier(0.25, 1, 0.5, 1) group relative overflow-hidden"
     >
       {/* Glow highlight overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
@@ -176,7 +127,7 @@ function PortalCard({
         <h3 className="text-xl font-bold tracking-tight">{title}</h3>
         <p className="text-muted-foreground text-sm leading-relaxed">{desc}</p>
         <div className="pt-4 flex flex-col sm:flex-row gap-2">
-          <Button asChild className="group-hover:scale-[1.01] active:scale-[0.98] transition">
+          <Button asChild className="active:scale-[0.98] transition">
             <Link to={primary.to as never} search={primary.search as never}>{primary.label}</Link>
           </Button>
           {secondary && (

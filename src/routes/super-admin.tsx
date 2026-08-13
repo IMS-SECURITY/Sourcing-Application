@@ -8,7 +8,9 @@ import {
   waitForFirebaseUser,
   signInWithEmail,
   firebaseSignOut,
+  getUserRoles,
 } from "@/integrations/firebase/auth";
+import { firebaseAuth } from "@/integrations/firebase/client";
 import {
   listAllUsersFn,
   adminCreateAnyUserFn,
@@ -34,6 +36,7 @@ const ALL_ROLES = [
   "recruitment_manager",
   "recruiter",
   "hiring_manager",
+  "sourcer",
   "candidate",
 ];
 
@@ -48,54 +51,47 @@ function SuperAdminPortal() {
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
 
-  // Create User form state
+  // User creation state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createName, setCreateName] = useState("");
   const [createEmail, setCreateEmail] = useState("");
   const [createPassword, setCreatePassword] = useState("");
-  const [createName, setCreateName] = useState("");
   const [createRoles, setCreateRoles] = useState<string[]>(["recruiter"]);
   const [creatingUser, setCreatingUser] = useState(false);
 
-  // Edit Roles state
+  // User edit state
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [editRoles, setEditRoles] = useState<string[]>([]);
   const [updatingRoles, setUpdatingRoles] = useState(false);
 
-  const navigate = useNavigate();
-
-  const checkAuthAndLoad = async () => {
-    setCheckingAuth(true);
-    try {
-      const user = await waitForFirebaseUser();
-      if (user) {
-        setCurrentUser(user);
-        await loadUsers();
+  useEffect(() => {
+    const unsub = firebaseAuth.onAuthStateChanged(async (firebaseUser: any) => {
+      if (firebaseUser) {
+        // Check if user is super_admin or hr_admin
+        const roles = await getUserRoles(firebaseUser.uid) as any[];
+        if (roles.includes("super_admin")) {
+          setCurrentUser(firebaseUser);
+          loadUsers();
+        } else {
+          toast.error("Access denied. Authorized administrators only.");
+          await firebaseSignOut();
+          setCurrentUser(null);
+        }
       } else {
         setCurrentUser(null);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
       setCheckingAuth(false);
-    }
-  };
-
-  useEffect(() => {
-    checkAuthAndLoad();
+    });
+    return unsub;
   }, []);
 
   const loadUsers = async () => {
     setLoadingUsers(true);
     try {
-      const data = await listAllUsersFn();
-      setUsers(data as UserRecord[]);
+      const res = await listAllUsersFn();
+      setUsers(res as UserRecord[]);
     } catch (err: any) {
-      toast.error(err.message || "Failed to load users. Make sure you are a super_admin.");
-      // If forbidden, sign out or clear user state
-      if (err.message?.includes("Forbidden")) {
-        await firebaseSignOut();
-        setCurrentUser(null);
-      }
+      toast.error(err.message || "Failed to load users");
     } finally {
       setLoadingUsers(false);
     }
@@ -105,21 +101,41 @@ function SuperAdminPortal() {
     e.preventDefault();
     setSigningIn(true);
     try {
-      await signInWithEmail(email, password);
-      toast.success("Signed in successfully");
-      await checkAuthAndLoad();
+      const creds = await signInWithEmail(email, password);
+      const roles = await getUserRoles(creds.user.uid) as any[];
+      if (roles.includes("super_admin")) {
+        setCurrentUser(creds.user);
+        loadUsers();
+      } else {
+        toast.error("Access denied. Authorized administrators only.");
+        await firebaseSignOut();
+      }
     } catch (err: any) {
-      toast.error(err.message || "Invalid credentials");
+      toast.error(err.message || "Sign in failed");
     } finally {
       setSigningIn(false);
     }
   };
 
   const handleSignOut = async () => {
-    await firebaseSignOut();
-    setCurrentUser(null);
-    setUsers([]);
-    toast.success("Signed out");
+    try {
+      await firebaseSignOut();
+      setCurrentUser(null);
+    } catch (err: any) {
+      toast.error(err.message || "Sign out failed");
+    }
+  };
+
+  const handleToggleCreateRole = (role: string) => {
+    setCreateRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    );
+  };
+
+  const handleToggleEditRole = (role: string) => {
+    setEditRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    );
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -132,40 +148,23 @@ function SuperAdminPortal() {
     try {
       await adminCreateAnyUserFn({
         data: {
-          email: createEmail,
-          fullName: createName,
+          email: createEmail.trim(),
           password: createPassword,
+          fullName: createName.trim(),
           roles: createRoles,
         },
       });
       toast.success("User created successfully");
       setShowCreateModal(false);
-      // Reset form
+      setCreateName("");
       setCreateEmail("");
       setCreatePassword("");
-      setCreateName("");
       setCreateRoles(["recruiter"]);
       await loadUsers();
     } catch (err: any) {
       toast.error(err.message || "Failed to create user");
     } finally {
       setCreatingUser(false);
-    }
-  };
-
-  const handleToggleCreateRole = (role: string) => {
-    if (createRoles.includes(role)) {
-      setCreateRoles(createRoles.filter((r) => r !== role));
-    } else {
-      setCreateRoles([...createRoles, role]);
-    }
-  };
-
-  const handleToggleEditRole = (role: string) => {
-    if (editRoles.includes(role)) {
-      setEditRoles(editRoles.filter((r) => r !== role));
-    } else {
-      setEditRoles([...editRoles, role]);
     }
   };
 
@@ -210,28 +209,25 @@ function SuperAdminPortal() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 text-foreground flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <Loader2 className="size-8 animate-spin text-accent" />
-          <p className="text-sm text-slate-400">Verifying session...</p>
+          <Loader2 className="size-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Verifying session...</p>
         </div>
       </div>
     );
   }
 
-  // 1. Sign In Screen
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-6">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="size-10 rounded-lg bg-accent/20 text-accent grid place-items-center">
-              <Shield className="size-5" />
+      <div className="min-h-screen bg-slate-50 text-foreground flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-8 shadow-md space-y-6">
+          <div className="text-center space-y-2">
+            <div className="size-12 rounded-full bg-primary/10 text-primary mx-auto grid place-items-center">
+              <Shield className="size-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Super Admin Portal</h1>
-              <p className="text-xs text-slate-400">Access restricted to authorized administrators</p>
-            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Super Admin Portal</h1>
+            <p className="text-sm text-muted-foreground">Access restricted to authorized administrators</p>
           </div>
 
           <form onSubmit={handleSignIn} className="space-y-4">
@@ -243,7 +239,7 @@ function SuperAdminPortal() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-slate-950 border-slate-800 focus:border-accent mt-1"
+                className="bg-white border-slate-200 focus:border-primary mt-1"
                 placeholder="admin@example.com"
               />
             </div>
@@ -255,7 +251,7 @@ function SuperAdminPortal() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-slate-950 border-slate-800 focus:border-accent mt-1"
+                className="bg-white border-slate-200 focus:border-primary mt-1"
                 placeholder="••••••••"
               />
             </div>
@@ -265,7 +261,7 @@ function SuperAdminPortal() {
           </form>
 
           <div className="mt-6 text-center">
-            <Link to="/" className="text-xs text-slate-400 hover:text-slate-200">
+            <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
               Return to landing page
             </Link>
           </div>
@@ -274,64 +270,60 @@ function SuperAdminPortal() {
     );
   }
 
-  // 2. Dashboard Screen
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div className="min-h-screen bg-slate-50 text-foreground flex flex-col">
+      <header className="border-b border-slate-200 bg-white px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded bg-accent/20 text-accent grid place-items-center font-bold">
+          <div className="size-8 rounded bg-primary/10 text-primary grid place-items-center font-bold">
             <Shield className="size-4" />
           </div>
-          <span className="font-bold text-lg tracking-tight">TalentFlow Admin Portal</span>
+          <span className="font-bold text-lg tracking-tight">TVSE Sync Admin Portal</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-slate-400 font-mono hidden sm:inline">{currentUser.email}</span>
-          <Button variant="ghost" onClick={handleSignOut} className="text-slate-400 hover:text-slate-100 hover:bg-slate-800 gap-2">
+          <span className="text-xs text-muted-foreground font-mono hidden sm:inline">{currentUser.email}</span>
+          <Button variant="ghost" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground hover:bg-slate-100 gap-2">
             <LogOut className="size-4" /> Sign Out
           </Button>
         </div>
       </header>
 
-      {/* Main Body */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Users Management</h1>
-            <p className="text-sm text-slate-400">View profiles, assign roles, create or delete application users.</p>
+            <p className="text-sm text-muted-foreground">View profiles, assign roles, create or delete application users.</p>
           </div>
           <Button onClick={() => setShowCreateModal(true)} className="gap-2">
             <Plus className="size-4" /> Create User
           </Button>
         </div>
 
-        {/* User list */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-md">
           {loadingUsers ? (
             <div className="py-20 flex flex-col items-center justify-center gap-2">
-              <Loader2 className="size-8 animate-spin text-accent" />
-              <p className="text-sm text-slate-400">Loading user registry...</p>
+              <Loader2 className="size-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading user registry...</p>
             </div>
           ) : users.length === 0 ? (
-            <div className="py-20 text-center text-slate-400">
+            <div className="py-20 text-center text-muted-foreground">
               No users found.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left">
                 <thead>
-                  <tr className="border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-950/40">
+                  <tr className="border-b border-slate-200 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-slate-50">
                     <th className="p-4">Name</th>
                     <th className="p-4">Email</th>
                     <th className="p-4">Roles</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-100">
                   {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-950/20 transition-colors">
-                      <td className="p-4 font-medium text-slate-200">{u.full_name || "—"}</td>
-                      <td className="p-4 font-mono text-xs text-slate-300">{u.email}</td>
+                    <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-4 font-medium text-slate-800">{u.full_name || "—"}</td>
+                      <td className="p-4 font-mono text-xs text-slate-600">{u.email}</td>
                       <td className="p-4">
                         <div className="flex flex-wrap gap-1">
                           {u.roles.map((r) => (
@@ -339,12 +331,12 @@ function SuperAdminPortal() {
                               key={r}
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                 r === "super_admin"
-                                  ? "bg-purple-950/80 text-purple-300 border border-purple-800"
+                                  ? "bg-purple-100 text-purple-800 border border-purple-200"
                                   : r === "hr_admin"
-                                  ? "bg-red-950/80 text-red-300 border border-red-800"
+                                  ? "bg-red-100 text-red-800 border border-red-200"
                                   : r === "candidate"
-                                  ? "bg-blue-950/80 text-blue-300 border border-blue-800"
-                                  : "bg-slate-800 text-slate-300"
+                                  ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                  : "bg-slate-100 text-slate-700"
                               }`}
                             >
                               {r}
@@ -360,7 +352,7 @@ function SuperAdminPortal() {
                             setEditingUser(u);
                             setEditRoles(u.roles);
                           }}
-                          className="hover:bg-slate-800 hover:text-slate-100 text-slate-400 size-8"
+                          className="hover:bg-slate-100 hover:text-slate-900 text-muted-foreground size-8"
                         >
                           <Edit2 className="size-3.5" />
                         </Button>
@@ -369,7 +361,7 @@ function SuperAdminPortal() {
                           size="icon"
                           disabled={u.id === currentUser.uid}
                           onClick={() => handleDeleteUser(u.id)}
-                          className="hover:bg-red-950/30 hover:text-red-400 text-slate-400 size-8"
+                          className="hover:bg-red-100 hover:text-red-600 text-muted-foreground size-8"
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
@@ -383,13 +375,12 @@ function SuperAdminPortal() {
         </div>
       </main>
 
-      {/* Create User Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h2 className="text-lg font-bold">Create User Account</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-100">
+              <button onClick={() => setShowCreateModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="size-5" />
               </button>
             </div>
@@ -402,7 +393,7 @@ function SuperAdminPortal() {
                   required
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 mt-1"
+                  className="bg-white border-slate-200 mt-1"
                 />
               </div>
               <div>
@@ -413,7 +404,7 @@ function SuperAdminPortal() {
                   required
                   value={createEmail}
                   onChange={(e) => setCreateEmail(e.target.value)}
-                  className="bg-slate-950 border-slate-800 mt-1"
+                  className="bg-white border-slate-200 mt-1"
                 />
               </div>
               <div>
@@ -424,7 +415,7 @@ function SuperAdminPortal() {
                   required
                   value={createPassword}
                   onChange={(e) => setCreatePassword(e.target.value)}
-                  className="bg-slate-950 border-slate-800 mt-1"
+                  className="bg-white border-slate-200 mt-1"
                 />
               </div>
 
@@ -440,8 +431,8 @@ function SuperAdminPortal() {
                         onClick={() => handleToggleCreateRole(role)}
                         className={`text-xs p-2 rounded border flex items-center justify-between transition-colors ${
                           isSel
-                            ? "bg-accent/15 border-accent text-accent font-medium"
-                            : "bg-slate-950 border-slate-800 text-slate-400"
+                            ? "bg-primary/10 border-primary text-primary font-medium"
+                            : "bg-white border-slate-200 text-muted-foreground hover:bg-slate-50"
                         }`}
                       >
                         <span>{role}</span>
@@ -452,7 +443,7 @@ function SuperAdminPortal() {
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-3 border-t border-slate-800">
+              <div className="flex gap-3 justify-end pt-3 border-t border-slate-200">
                 <Button type="button" variant="ghost" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </Button>
@@ -465,16 +456,15 @@ function SuperAdminPortal() {
         </div>
       )}
 
-      {/* Edit Roles Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
                 <h2 className="text-lg font-bold">Edit User Roles</h2>
-                <p className="text-xs text-slate-400">{editingUser.email}</p>
+                <p className="text-xs text-muted-foreground">{editingUser.email}</p>
               </div>
-              <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-100">
+              <button onClick={() => setEditingUser(null)} className="text-muted-foreground hover:text-foreground">
                 <X className="size-5" />
               </button>
             </div>
@@ -492,8 +482,8 @@ function SuperAdminPortal() {
                         onClick={() => handleToggleEditRole(role)}
                         className={`text-xs p-2 rounded border flex items-center justify-between transition-colors ${
                           isSel
-                            ? "bg-accent/15 border-accent text-accent font-medium"
-                            : "bg-slate-950 border-slate-800 text-slate-400"
+                            ? "bg-primary/10 border-primary text-primary font-medium"
+                            : "bg-white border-slate-200 text-muted-foreground hover:bg-slate-50"
                         }`}
                       >
                         <span>{role}</span>
@@ -504,7 +494,7 @@ function SuperAdminPortal() {
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-3 border-t border-slate-800">
+              <div className="flex gap-3 justify-end pt-3 border-t border-slate-200">
                 <Button variant="ghost" onClick={() => setEditingUser(null)}>
                   Cancel
                 </Button>
