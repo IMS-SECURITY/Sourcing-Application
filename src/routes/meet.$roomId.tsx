@@ -113,10 +113,20 @@ function MeetRoom() {
         console.warn("Fetch roles failed", err);
       }
 
-      // Clean up old signals from previous sessions in this room
+      // Clean up old signals from previous sessions in this room (older than 10 minutes)
       try {
         const snap = await getDocs(signalsRef);
-        await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+        const now = new Date();
+        await Promise.all(
+          snap.docs.map((d) => {
+            const data = d.data();
+            const createdAt = data.created_at ? new Date(data.created_at) : null;
+            if (!createdAt || (now.getTime() - createdAt.getTime() > 10 * 60 * 1000)) {
+              return deleteDoc(d.ref);
+            }
+            return Promise.resolve();
+          })
+        );
       } catch (err) {
         console.warn("Signal cleanup failed", err);
       }
