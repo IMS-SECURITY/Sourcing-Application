@@ -12,7 +12,6 @@ export default defineConfig({
   },
   vite: {
     build: {
-      minify: "esbuild",
       cssCodeSplit: true,
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
