@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { COL, type ApplicationDoc, type CandidateDoc, type InterviewDoc } from "@/integrations/firebase/schema";
-import { getDocById, listDocs, listRecent, listWhereIn, toDateSafe, where } from "@/integrations/firebase/db";
+import { toDateSafe } from "@/integrations/firebase/db";
 import { PageHeader } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,39 +9,68 @@ import { stageLabel, stageTone } from "@/lib/pipeline";
 import { Briefcase, Video, Search } from "lucide-react";
 import { format, isFuture } from "date-fns";
 
+import { useState, useEffect } from "react";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
+import { firestore } from "@/integrations/firebase/client";
+
 export const Route = createFileRoute("/_authenticated/portal")({
   component: CandidatePortal,
 });
 
 function CandidatePortal() {
   const { user } = useAuth();
+  const [candidate, setCandidate] = useState<CandidateDoc | null>(null);
+  const [applications, setApplications] = useState<ApplicationDoc[]>([]);
+  const [interviews, setInterviews] = useState<InterviewDoc[]>([]);
 
-  const { data: candidate } = useQuery({
-    queryKey: ["my-candidate", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      return await getDocById<CandidateDoc>(COL.candidates, user!.id);
-    },
-  });
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsub = onSnapshot(doc(firestore, COL.candidates, user.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setCandidate({ id: docSnap.id, ...docSnap.data() } as CandidateDoc);
+      }
+    });
+    return unsub;
+  }, [user?.id]);
 
-  const { data: applications = [] } = useQuery({
-    queryKey: ["my-applications", candidate?.id],
-    enabled: !!candidate,
-    queryFn: () => listRecent<ApplicationDoc>(
-      COL.applications,
-      where("candidate_id", "==", candidate!.id),
-      where("candidate_user_id", "==", user!.id),
-    ),
-  });
+  useEffect(() => {
+    if (!candidate?.id || !user?.id) return;
+    const q = query(
+      collection(firestore, COL.applications),
+      where("candidate_id", "==", candidate.id),
+      where("candidate_user_id", "==", user.id)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const docs: ApplicationDoc[] = [];
+      snapshot.forEach((d) => {
+        docs.push({ id: d.id, ...d.data() } as ApplicationDoc);
+      });
+      docs.sort((a, b) => {
+        const tA = a.created_at ? toDateSafe(a.created_at).getTime() : 0;
+        const tB = b.created_at ? toDateSafe(b.created_at).getTime() : 0;
+        return tB - tA;
+      });
+      setApplications(docs);
+    });
+    return unsub;
+  }, [candidate?.id, user?.id]);
 
-  const { data: interviews = [] } = useQuery({
-    queryKey: ["my-interviews", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const rows = await listDocs<InterviewDoc>(COL.interviews, where("candidate_user_id", "==", user!.id));
-      return rows.sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)));
-    },
-  });
+  useEffect(() => {
+    if (!user?.id) return;
+    const q = query(
+      collection(firestore, COL.interviews),
+      where("candidate_user_id", "==", user.id)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const docs: InterviewDoc[] = [];
+      snapshot.forEach((d) => {
+        docs.push({ id: d.id, ...d.data() } as InterviewDoc);
+      });
+      docs.sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)));
+      setInterviews(docs);
+    });
+    return unsub;
+  }, [user?.id]);
 
   const roleByApp = new Map(applications.map((a) => [a.id, a.vacancy_role]));
   const upcoming = interviews.filter((i) => i.status === "scheduled" && isFuture(new Date(i.scheduled_at)));

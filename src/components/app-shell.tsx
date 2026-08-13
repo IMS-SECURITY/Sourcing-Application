@@ -34,11 +34,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user } = useAuth();
-  const { roles } = useRoles(user?.id);
+  const { roles, loading: loadingRoles } = useRoles(user?.id);
   const isCandidate = roles.includes("candidate") && !roles.some((r) => r !== "candidate");
   const isSourcer = roles.includes("sourcer") && !roles.includes("hr_admin") && !roles.includes("recruitment_manager") && !roles.includes("recruiter");
   const isAdmin = roles.includes("hr_admin");
-  const nav = isCandidate ? candidateNav : isSourcer ? sourcerNav : staffNav;
+  const nav = loadingRoles ? [] : isCandidate ? candidateNav : isSourcer ? sourcerNav : staffNav;
 
   async function signOut() {
     await firebaseSignOut();
