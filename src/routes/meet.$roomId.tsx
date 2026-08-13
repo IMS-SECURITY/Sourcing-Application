@@ -113,23 +113,8 @@ function MeetRoom() {
         console.warn("Fetch roles failed", err);
       }
 
-      // Clean up old signals from previous sessions in this room (older than 10 minutes)
-      try {
-        const snap = await getDocs(signalsRef);
-        const now = new Date();
-        await Promise.all(
-          snap.docs.map((d) => {
-            const data = d.data();
-            const createdAt = data.created_at ? new Date(data.created_at) : null;
-            if (!createdAt || (now.getTime() - createdAt.getTime() > 10 * 60 * 1000)) {
-              return deleteDoc(d.ref);
-            }
-            return Promise.resolve();
-          })
-        );
-      } catch (err) {
-        console.warn("Signal cleanup failed", err);
-      }
+      // No active deletions on join to prevent clock skew issues.
+      // Instead, we filter out older signaling messages in the real-time listener.
 
       // 1) Get local media (Reuse lobby stream if available)
       let stream = localStreamRef.current;
@@ -221,6 +206,12 @@ function MeetRoom() {
             const event = data.event;
 
             console.log(`[WebRTC] Received signal: ${event} from ${data.from}`);
+
+            // Ignore stale signals from previous sessions in the room
+            if (data.created_at && data.created_at < joinTime) {
+              console.log(`[WebRTC] Ignoring stale signal: ${event} from ${data.from} (created before join)`);
+              return;
+            }
 
             if (event === "join") {
               // Lexicographical peer arbitration to prevent offer/answer collision
