@@ -35,9 +35,6 @@ function Dashboard() {
     }
   }, [roles, loadingAuth, loadingRoles, navigate]);
 
-  if (loadingAuth || loadingRoles) {
-    return <TvsePageLoader />;
-  }
 
   const { data: vacancies = [], isLoading } = useQuery({
     queryKey: ["vacancies-all"],
@@ -69,7 +66,7 @@ function Dashboard() {
 
   const breaches = slaItems.filter((v) => v.sla!.tone === "critical").length;
 
-  if (isLoading) {
+  if (loadingAuth || loadingRoles || isLoading) {
     return <TvsePageLoader />;
   }
 
