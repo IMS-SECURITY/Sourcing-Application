@@ -256,7 +256,7 @@ function MeetRoom() {
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, inLobby]);
 
 
   function toggleMic() {
