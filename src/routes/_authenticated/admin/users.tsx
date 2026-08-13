@@ -32,15 +32,15 @@ function randomPassword(len = 14): string {
 }
 
 function AdminUsersPage() {
-  const { user } = useAuth();
+  const { user, loading: loadingAuth } = useAuth();
   const { roles, loading: loadingRoles } = useRoles(user?.id);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loadingRoles && !roles.includes("hr_admin")) {
+    if (!loadingAuth && !loadingRoles && !roles.includes("hr_admin")) {
       navigate({ to: "/dashboard" });
     }
-  }, [roles, loadingRoles, navigate]);
+  }, [roles, loadingAuth, loadingRoles, navigate]);
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -59,7 +59,7 @@ function AdminUsersPage() {
     });
   }, []);
 
-  if (loadingRoles) {
+  if (loadingAuth || loadingRoles) {
     return <TvsePageLoader />;
   }
 

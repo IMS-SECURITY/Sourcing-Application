@@ -25,17 +25,17 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 import { TvsePageLoader } from "@/components/tvse-loader";
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, loading: loadingAuth } = useAuth();
   const { roles, loading: loadingRoles } = useRoles(user?.id);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loadingRoles && roles.includes("candidate") && !roles.some((r) => r !== "candidate")) {
+    if (!loadingAuth && !loadingRoles && roles.includes("candidate") && !roles.some((r) => r !== "candidate")) {
       navigate({ to: "/portal" });
     }
-  }, [roles, loadingRoles, navigate]);
+  }, [roles, loadingAuth, loadingRoles, navigate]);
 
-  if (loadingRoles) {
+  if (loadingAuth || loadingRoles) {
     return <TvsePageLoader />;
   }
 
