@@ -1,9 +1,9 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { COL, type ReplacementDoc, type VacancyDoc } from "@/integrations/firebase/schema";
 import { listDocs, listRecent } from "@/integrations/firebase/db";
-import { waitForFirebaseUser, getUserRoles } from "@/integrations/firebase/auth";
+import { waitForFirebaseUser } from "@/integrations/firebase/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,15 +11,13 @@ import { computeSla, toneClasses } from "@/lib/sla";
 import { sendMyHrDigest } from "@/lib/hr-digest.functions";
 import { Plus, AlertTriangle, Briefcase, Clock, CheckCircle2, Repeat, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect } from "react";
+import { useAuth, useRoles } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   beforeLoad: async () => {
     const user = await waitForFirebaseUser();
     if (!user) throw redirect({ to: "/auth" });
-    const roles = await getUserRoles(user.uid);
-    if (roles.includes("candidate") && !roles.some((r) => r !== "candidate")) {
-      throw redirect({ to: "/portal" });
-    }
   },
   component: Dashboard,
 });
@@ -27,6 +25,20 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 import { TvsePageLoader } from "@/components/tvse-loader";
 
 function Dashboard() {
+  const { user } = useAuth();
+  const { roles, loading: loadingRoles } = useRoles(user?.id);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loadingRoles && roles.includes("candidate") && !roles.some((r) => r !== "candidate")) {
+      navigate({ to: "/portal" });
+    }
+  }, [roles, loadingRoles, navigate]);
+
+  if (loadingRoles) {
+    return <TvsePageLoader />;
+  }
+
   const { data: vacancies = [], isLoading } = useQuery({
     queryKey: ["vacancies-all"],
     queryFn: async () => {

@@ -1,6 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { waitForFirebaseUser, getUserRoles } from "@/integrations/firebase/auth";
+import { waitForFirebaseUser } from "@/integrations/firebase/auth";
 import { adminCreateStaffUser } from "@/lib/auth.functions";
 import { COL } from "@/integrations/firebase/schema";
 import { getDocById, setDocIn } from "@/integrations/firebase/db";
@@ -11,13 +11,13 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
+import { useAuth, useRoles } from "@/hooks/use-auth";
+import { TvsePageLoader } from "@/components/tvse-loader";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
   beforeLoad: async () => {
     const user = await waitForFirebaseUser();
     if (!user) throw redirect({ to: "/auth" });
-    const roles = await getUserRoles(user.uid);
-    if (!roles.includes("hr_admin")) throw redirect({ to: "/dashboard" });
   },
   component: AdminUsersPage,
 });
@@ -32,6 +32,16 @@ function randomPassword(len = 14): string {
 }
 
 function AdminUsersPage() {
+  const { user } = useAuth();
+  const { roles, loading: loadingRoles } = useRoles(user?.id);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loadingRoles && !roles.includes("hr_admin")) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [roles, loadingRoles, navigate]);
+
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<"recruiter" | "hr_admin">("recruiter");
@@ -48,6 +58,10 @@ function AdminUsersPage() {
       }
     });
   }, []);
+
+  if (loadingRoles) {
+    return <TvsePageLoader />;
+  }
 
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
