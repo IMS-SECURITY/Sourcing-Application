@@ -207,8 +207,8 @@ function MeetRoom() {
 
             console.log(`[WebRTC] Received signal: ${event} from ${data.from}`);
 
-            // Ignore stale signals from previous sessions in the room
-            if (data.created_at && data.created_at < joinTime) {
+            // Ignore stale SDP/ICE signals from previous sessions in the room
+            if (event !== "join" && data.created_at && data.created_at < joinTime) {
               console.log(`[WebRTC] Ignoring stale signal: ${event} from ${data.from} (created before join)`);
               return;
             }
