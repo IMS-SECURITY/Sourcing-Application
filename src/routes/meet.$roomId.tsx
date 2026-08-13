@@ -159,9 +159,26 @@ function MeetRoom() {
       // 2) Create RTCPeerConnection
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       pcRef.current = pc;
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+      console.log("[WebRTC] Created RTCPeerConnection", pc);
+
+      pc.onconnectionstatechange = () => {
+        console.log("[WebRTC] Connection state changed:", pc.connectionState);
+        if (pc.connectionState === "connected") {
+          setPeerJoined(true);
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log("[WebRTC] ICE Connection state changed:", pc.iceConnectionState);
+      };
+
+      stream.getTracks().forEach((t) => {
+        console.log("[WebRTC] Adding track to PeerConnection:", t.kind);
+        pc.addTrack(t, stream);
+      });
 
       pc.ontrack = (ev) => {
+        console.log("[WebRTC] Received remote track:", ev.streams[0]);
         if (remoteVideoRef.current && ev.streams[0]) {
           remoteVideoRef.current.srcObject = ev.streams[0];
           setPeerJoined(true);
@@ -171,6 +188,7 @@ function MeetRoom() {
       // 3) Firestore Signaling
       const send = async (event: string, payload: unknown) => {
         try {
+          console.log(`[WebRTC] Sending signal: ${event}`, payload);
           await addDoc(signalsRef, {
             from: myId,
             event,
@@ -178,13 +196,16 @@ function MeetRoom() {
             created_at: new Date().toISOString(),
           });
         } catch (err) {
-          console.warn("Signal send failed", err);
+          console.warn("[WebRTC] Signal send failed", err);
         }
       };
       sendSignalRef.current = send;
 
       pc.onicecandidate = (ev) => {
-        if (ev.candidate) send("ice", { candidate: ev.candidate });
+        if (ev.candidate) {
+          console.log("[WebRTC] Local ICE Candidate generated:", ev.candidate.candidate);
+          send("ice", { candidate: ev.candidate });
+        }
       };
 
       // role: first-arriver waits (callee), second-arriver creates offer (caller)
@@ -199,65 +220,88 @@ function MeetRoom() {
             const payload = JSON.parse(data.payload);
             const event = data.event;
 
+            console.log(`[WebRTC] Received signal: ${event} from ${data.from}`);
+
             if (event === "join") {
               // Lexicographical peer arbitration to prevent offer/answer collision
               if (myId < data.from) {
+                console.log("[WebRTC] Acting as Caller. Creating offer...");
                 isCaller = true;
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 send("offer", { sdp: offer });
               } else {
+                console.log("[WebRTC] Acting as Callee. Waiting for offer...");
                 isCaller = false;
               }
             } else if (event === "offer") {
+              console.log("[WebRTC] Received offer. Setting remote description...");
               await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+              console.log("[WebRTC] Creating answer...");
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
               send("answer", { sdp: answer });
 
               // Flush queued ICE candidates
+              console.log(`[WebRTC] Flushing ${iceCandidatesQueue.length} queued ICE candidates`);
               while (iceCandidatesQueue.length > 0) {
                 const cand = iceCandidatesQueue.shift();
                 if (cand) {
-                  await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+                  await pc.addIceCandidate(new RTCIceCandidate(cand)).catch((err) => {
+                    console.error("[WebRTC] Failed to add queued ICE candidate:", err);
+                  });
                 }
               }
             } else if (event === "answer") {
+              console.log("[WebRTC] Received answer.");
               if (!pc.currentRemoteDescription) {
+                console.log("[WebRTC] Setting remote description...");
                 await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
 
                 // Flush queued ICE candidates
+                console.log(`[WebRTC] Flushing ${iceCandidatesQueue.length} queued ICE candidates`);
                 while (iceCandidatesQueue.length > 0) {
                   const cand = iceCandidatesQueue.shift();
                   if (cand) {
-                    await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+                    await pc.addIceCandidate(new RTCIceCandidate(cand)).catch((err) => {
+                      console.error("[WebRTC] Failed to add queued ICE candidate:", err);
+                    });
                   }
                 }
               }
             } else if (event === "ice") {
               const candidateInit = payload.candidate;
               if (pc.remoteDescription) {
+                console.log("[WebRTC] Remote description is set. Adding ICE candidate immediately:", candidateInit.candidate);
                 try {
                   await pc.addIceCandidate(new RTCIceCandidate(candidateInit));
-                } catch (e) { /* ignore */ }
+                } catch (e) {
+                  console.error("[WebRTC] Failed to add immediate ICE candidate:", e);
+                }
               } else {
+                console.log("[WebRTC] Remote description not set yet. Queueing ICE candidate:", candidateInit.candidate);
                 iceCandidatesQueue.push(candidateInit);
               }
             } else if (event === "share_state") {
               setRemoteSharing(payload.sharing);
             } else if (event === "bye") {
+              console.log("[WebRTC] Peer disconnected (bye signal)");
               setPeerJoined(false);
               if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
             }
           }
         });
+      }, (error) => {
+        console.error("[WebRTC] Firestore onSnapshot error:", error);
       });
       unsubSignalsRef.current = unsub;
 
       // Announce my arrival; the existing peer will respond with an offer
+      console.log("[WebRTC] Sending join signal...");
       send("join", {});
 
       cleanupFns.push(() => {
+        console.log("[WebRTC] Cleaning up signal subscription and sending bye...");
         send("bye", {});
         unsub();
       });
