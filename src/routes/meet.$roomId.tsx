@@ -49,13 +49,20 @@ function MeetRoom() {
 
   useEffect(() => {
     if (!inLobby) return;
-    let activeStream: MediaStream | null = null;
+
+    if (localStreamRef.current) {
+      setLobbyStream(localStreamRef.current);
+      if (lobbyVideoRef.current) {
+        lobbyVideoRef.current.srcObject = localStreamRef.current;
+      }
+      return;
+    }
 
     navigator.mediaDevices.getUserMedia({
       audio: true,
       video: true,
     }).then((s) => {
-      activeStream = s;
+      localStreamRef.current = s;
       setLobbyStream(s);
       if (lobbyVideoRef.current) {
         lobbyVideoRef.current.srcObject = s;
@@ -63,19 +70,13 @@ function MeetRoom() {
     }).catch((err) => {
       console.warn("Failed to get camera for lobby, falling back to audio only", err);
       navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
-        activeStream = s;
+        localStreamRef.current = s;
         setLobbyStream(s);
         if (lobbyVideoRef.current) {
           lobbyVideoRef.current.srcObject = s;
         }
       }).catch(e => console.error(e));
     });
-
-    return () => {
-      if (activeStream) {
-        activeStream.getTracks().forEach((track) => track.stop());
-      }
-    };
   }, [inLobby]);
 
   useEffect(() => {
@@ -120,27 +121,29 @@ function MeetRoom() {
         console.warn("Signal cleanup failed", err);
       }
 
-      // 1) Get local media
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      } catch (e) {
-        if (!isCand) {
-          // Recruiter fallback to audio only if camera is unavailable
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            setCamOn(false);
-          } catch (err) {
-            toast.error("Microphone access required to join.");
+      // 1) Get local media (Reuse lobby stream if available)
+      let stream = localStreamRef.current;
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          localStreamRef.current = stream;
+        } catch (e) {
+          if (!isCand) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+              localStreamRef.current = stream;
+              setCamOn(false);
+            } catch (err) {
+              toast.error("Microphone access required to join.");
+              return;
+            }
+          } else {
+            toast.error("Camera and microphone access are required for candidates.");
             return;
           }
-        } else {
-          toast.error("Camera and microphone access are required for candidates.");
-          return;
         }
       }
       if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-      localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
       // 2) Create RTCPeerConnection
