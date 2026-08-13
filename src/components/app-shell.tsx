@@ -1,5 +1,5 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, Briefcase, Users, Building2, BarChart3, LogOut, UserCircle, Search, ClipboardList, Video, Shield } from "lucide-react";
+import { LayoutDashboard, Briefcase, Users, Building2, BarChart3, LogOut, UserCircle, Search, ClipboardList, Video, Shield, Loader2 } from "lucide-react";
 import { useAuth, useRoles } from "@/hooks/use-auth";
 import { firebaseSignOut } from "@/integrations/firebase/auth";
 import { Button } from "@/components/ui/button";
@@ -57,27 +57,34 @@ export function AppShell({ children }: { children: ReactNode }) {
               TVS ELECTRONICS
             </div>
             <div className="text-[8px] uppercase tracking-wider text-muted-foreground font-semibold mt-3.5 border-t border-sidebar-border pt-1.5">
-              {isCandidate ? "Candidate Portal" : isSourcer ? "Sourcer OS" : "Recruitment OS"}
+              {loadingRoles ? "Loading portal..." : isCandidate ? "Candidate Portal" : isSourcer ? "Sourcer OS" : "Recruitment OS"}
             </div>
           </Link>
         </div>
         <nav className="flex-1 px-2 py-3 space-y-0.5">
-          {[...nav, ...(isAdmin && !isCandidate ? adminNav : [])].map((n) => {
-            const active = pathname.startsWith(n.to);
-            const Icon = n.icon;
-            return (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition ${
-                  active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/60 text-sidebar-foreground/80"
-                }`}
-              >
-                <Icon className="size-4" />
-                <span>{n.label}</span>
-              </Link>
-            );
-          })}
+          {loadingRoles ? (
+            <div className="py-4 px-3 flex items-center gap-2 text-xs text-sidebar-foreground/60">
+              <Loader2 className="size-3.5 animate-spin text-primary" />
+              <span>Resolving dashboard...</span>
+            </div>
+          ) : (
+            [...nav, ...(isAdmin && !isCandidate ? adminNav : [])].map((n) => {
+              const active = pathname.startsWith(n.to);
+              const Icon = n.icon;
+              return (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition ${
+                    active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/60 text-sidebar-foreground/80"
+                  }`}
+                >
+                  <Icon className="size-4" />
+                  <span>{n.label}</span>
+                </Link>
+              );
+            })
+          )}
         </nav>
 
         <div className="px-3 py-3 border-t border-sidebar-border space-y-2">
@@ -85,7 +92,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <UserCircle className="size-4 opacity-70" />
             <div className="flex-1 min-w-0">
               <div className="truncate">{user?.email}</div>
-              <div className="text-[10px] opacity-60 uppercase">{roles[0]?.replace(/_/g, " ") ?? "no role"}</div>
+              <div className="text-[10px] opacity-60 uppercase">
+                {loadingRoles ? "Loading..." : (roles[0]?.replace(/_/g, " ") ?? "no role")}
+              </div>
             </div>
           </div>
           <Button onClick={signOut} variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent">
