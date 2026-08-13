@@ -34,10 +34,9 @@ function CandidatePortal() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!candidate?.id || !user?.id) return;
+    if (!user?.id) return;
     const q = query(
       collection(firestore, COL.applications),
-      where("candidate_id", "==", candidate.id),
       where("candidate_user_id", "==", user.id)
     );
     const unsub = onSnapshot(q, (snapshot) => {
@@ -51,9 +50,11 @@ function CandidatePortal() {
         return tB - tA;
       });
       setApplications(docs);
+    }, (error) => {
+      console.error("Applications snapshot error:", error);
     });
     return unsub;
-  }, [candidate?.id, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
