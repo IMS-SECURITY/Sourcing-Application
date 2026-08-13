@@ -30,6 +30,8 @@ function MeetRoom() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const unsubSignalsRef = useRef<(() => void) | null>(null);
   const sendSignalRef = useRef<((event: string, payload: unknown) => Promise<void>) | null>(null);
 
@@ -47,6 +49,19 @@ function MeetRoom() {
   const [lobbyCamOn, setLobbyCamOn] = useState(true);
   const [lobbyStream, setLobbyStream] = useState<MediaStream | null>(null);
   const lobbyVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Re-bind srcObject streams to video elements whenever the layout changes
+  useEffect(() => {
+    if (inLobby) return;
+    console.log("[WebRTC] Re-binding video elements. Sharing:", sharing, "Remote Sharing:", remoteSharing);
+    
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = sharing ? screenStreamRef.current : localStreamRef.current;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStreamRef.current;
+    }
+  }, [sharing, remoteSharing, peerJoined, inLobby]);
 
   useEffect(() => {
     if (!inLobby) return;
@@ -182,8 +197,11 @@ function MeetRoom() {
 
       pc.ontrack = (ev) => {
         console.log("[WebRTC] Received remote track:", ev.streams[0]);
-        if (remoteVideoRef.current && ev.streams[0]) {
-          remoteVideoRef.current.srcObject = ev.streams[0];
+        if (ev.streams[0]) {
+          remoteStreamRef.current = ev.streams[0];
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = ev.streams[0];
+          }
           setPeerJoined(true);
         }
       };
@@ -301,6 +319,7 @@ function MeetRoom() {
               console.log("[WebRTC] Peer disconnected (bye signal)");
               setPeerJoined(false);
               if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+              remoteStreamRef.current = null;
             }
           }
         });
@@ -327,6 +346,8 @@ function MeetRoom() {
       pcRef.current = null;
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
+      remoteStreamRef.current = null;
+      screenStreamRef.current = null;
     };
   }, [roomId, inLobby]);
 
@@ -354,11 +375,24 @@ function MeetRoom() {
       const screenTrack = display.getVideoTracks()[0];
       const sender = pc.getSenders().find((s) => s.track?.kind === "video");
       if (sender) await sender.replaceTrack(screenTrack);
+      
+      screenStreamRef.current = display;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = display;
+      }
+
       setSharing(true);
       sendSignalRef.current?.("share_state", { sharing: true });
+      
       screenTrack.onended = async () => {
         const camTrack = localStreamRef.current?.getVideoTracks()[0];
         if (sender && camTrack) await sender.replaceTrack(camTrack);
+        
+        screenStreamRef.current = null;
+        if (localVideoRef.current && localStreamRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+        }
+
         setSharing(false);
         sendSignalRef.current?.("share_state", { sharing: false });
       };
