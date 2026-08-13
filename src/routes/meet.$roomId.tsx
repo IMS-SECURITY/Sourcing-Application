@@ -40,6 +40,7 @@ function MeetRoom() {
   const [isCandidate, setIsCandidate] = useState(false);
   const [peerJoined, setPeerJoined] = useState(false);
   const [myUserId, setMyUserId] = useState<string>("");
+  const [peerName, setPeerName] = useState<string>("Participant");
 
   const [inLobby, setInLobby] = useState(true);
   const [lobbyMicOn, setLobbyMicOn] = useState(true);
@@ -105,12 +106,29 @@ function MeetRoom() {
       setMyUserId(myId);
 
       let isCand = false;
+      let myName = user.email || "Participant";
+
       try {
         const roleDoc = await getDocById<{ roles: string[] }>(COL.userRoles, myId);
         isCand = roleDoc?.roles?.includes("candidate") ?? false;
         setIsCandidate(isCand);
       } catch (err) {
         console.warn("Fetch roles failed", err);
+      }
+
+      // Fetch user's actual full name to exchange with peer
+      try {
+        const pDoc = await getDocById<{ full_name?: string }>(COL.profiles, myId);
+        if (pDoc?.full_name) {
+          myName = pDoc.full_name;
+        } else {
+          const cDoc = await getDocById<{ full_name?: string }>(COL.candidates, myId);
+          if (cDoc?.full_name) {
+            myName = cDoc.full_name;
+          }
+        }
+      } catch (err) {
+        console.warn("Fetch name failed", err);
       }
 
       // No active deletions on join to prevent clock skew issues.
@@ -213,6 +231,10 @@ function MeetRoom() {
               return;
             }
 
+            if (payload && payload.name) {
+              setPeerName(payload.name);
+            }
+
             if (event === "join") {
               // Lexicographical peer arbitration to prevent offer/answer collision
               if (myId < data.from) {
@@ -220,7 +242,7 @@ function MeetRoom() {
                 isCaller = true;
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                send("offer", { sdp: offer });
+                send("offer", { sdp: offer, name: myName });
               } else {
                 console.log("[WebRTC] Acting as Callee. Waiting for offer...");
                 isCaller = false;
@@ -231,7 +253,7 @@ function MeetRoom() {
               console.log("[WebRTC] Creating answer...");
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
-              send("answer", { sdp: answer });
+              send("answer", { sdp: answer, name: myName });
 
               // Flush queued ICE candidates
               console.log(`[WebRTC] Flushing ${iceCandidatesQueue.length} queued ICE candidates`);
@@ -289,7 +311,7 @@ function MeetRoom() {
 
       // Announce my arrival; the existing peer will respond with an offer
       console.log("[WebRTC] Sending join signal...");
-      send("join", {});
+      send("join", { name: myName });
 
       cleanupFns.push(() => {
         console.log("[WebRTC] Cleaning up signal subscription and sending bye...");
@@ -463,7 +485,7 @@ function MeetRoom() {
               className="w-full h-full object-contain"
             />
             <div className="absolute bottom-3 left-3 bg-black/60 px-2 py-1 rounded text-xs">
-              {remoteSharing ? "Participant's Screen" : "Your Screen Presentation"}
+              {remoteSharing ? `${peerName}'s Screen` : "Your Screen Presentation"}
             </div>
           </div>
 
@@ -491,7 +513,7 @@ function MeetRoom() {
                     Waiting for participant...
                   </div>
                 )}
-                <div className="absolute bottom-3 left-3 bg-black/60 px-2 py-1 rounded text-xs">Participant</div>
+                <div className="absolute bottom-3 left-3 bg-black/60 px-2 py-1 rounded text-xs">{peerName}</div>
               </div>
             )}
           </div>
@@ -499,7 +521,7 @@ function MeetRoom() {
       ) : (
         <main className="flex-1 grid md:grid-cols-2 gap-2 p-2 bg-black">
           <Tile label="You" muted videoRef={localVideoRef} active={camOn} />
-          <Tile label={peerJoined ? "Participant" : "Waiting for participant…"} videoRef={remoteVideoRef} active={peerJoined} placeholder={!peerJoined} />
+          <Tile label={peerJoined ? peerName : "Waiting for participant…"} videoRef={remoteVideoRef} active={peerJoined} placeholder={!peerJoined} />
         </main>
       )}
 
