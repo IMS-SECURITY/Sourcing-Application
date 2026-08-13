@@ -200,10 +200,15 @@ function MeetRoom() {
             const event = data.event;
 
             if (event === "join") {
-              isCaller = true;
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              send("offer", { sdp: offer });
+              // Lexicographical peer arbitration to prevent offer/answer collision
+              if (myId < data.from) {
+                isCaller = true;
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                send("offer", { sdp: offer });
+              } else {
+                isCaller = false;
+              }
             } else if (event === "offer") {
               await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
               const answer = await pc.createAnswer();
